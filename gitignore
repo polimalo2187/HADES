@@ -1,0 +1,30 @@
+
+---
+
+## 📄 Archivo: `.gitignore`
+
+```gitignore
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+
+# Virtualenv
+venv/
+.env/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+mongo_data/
+
+# IDE
+.idea/
+.vscode/
