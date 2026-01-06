@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+  mongodb:
+    image: mongo:6.0
+    container_name: hades_mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: hades_forex
+
+  bot:
+    build: .
+    container_name: hades_bot
+    command: python scripts/start_bot.py
+    env_file:
+      - .env
+    depends_on:
+      - mongodb
+
+  engine:
+    build: .
+    container_name: hades_engine
+    command: python scripts/start_engine.py
+    env_file:
+      - .env
+    depends_on:
+      - mongodb
+
+volumes:
+  mongo_data:
