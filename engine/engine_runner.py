@@ -1,0 +1,93 @@
+# engine/engine_runner.py
+
+import time
+from core.logger import get_logger
+from engine.market_data import MarketDataProvider
+from engine.indicators import IndicatorEngine
+from engine.signal_scoring import SignalScorer
+from engine.signal_generator import SignalGenerator
+from signal_manager.signal_repository import SignalRepository
+from signal_manager.signal_cleanup import SignalCleanup
+
+logger = get_logger(__name__)
+
+
+class EngineRunner:
+    """
+    Ejecuta el motor de análisis de mercado 24/7.
+    TOTALMENTE independiente de Telegram.
+    """
+
+    def __init__(self, interval_seconds: int = 60):
+        self.interval_seconds = interval_seconds
+        self.running = False
+
+        # Componentes del engine
+        self.market_data = MarketDataProvider()
+        self.indicators = IndicatorEngine()
+        self.scorer = SignalScorer()
+        self.generator = SignalGenerator()
+        self.signal_repo = SignalRepository()
+        self.signal_cleanup = SignalCleanup()
+
+    def start(self):
+        logger.info("🔥 HADES Engine iniciado (modo 24/7)")
+        self.running = True
+
+        while self.running:
+            try:
+                self.run_cycle()
+            except Exception as e:
+                logger.exception(f"❌ Error en ciclo del engine: {e}")
+
+            time.sleep(self.interval_seconds)
+
+    def stop(self):
+        self.running = False
+        logger.info("🛑 HADES Engine detenido")
+
+    def run_cycle(self):
+        """
+        Ciclo completo de análisis:
+        - Limpia señales expiradas
+        - Recorre pares
+        - Analiza mercado
+        - Genera señales nuevas si aplica
+        """
+
+        logger.info("🔁 Iniciando ciclo de análisis")
+
+        # 1️⃣ Limpieza de señales expiradas
+        self.signal_cleanup.cleanup_expired_signals()
+
+        # 2️⃣ Evitar solapamiento de señales
+        if self.signal_repo.has_active_signal():
+            logger.info("⏳ Señal activa detectada, se omite generación")
+            return
+
+        # 3️⃣ Analizar cada par soportado
+        for pair in self.market_data.get_supported_pairs():
+            candles = self.market_data.fetch_latest_data(pair)
+
+            if not candles or len(candles) < 50:
+                continue
+
+            indicators = self.indicators.calculate(candles)
+            score = self.scorer.score(indicators)
+
+            if not self.scorer.is_tradeable(score):
+                continue
+
+            signal = self.generator.generate(
+                pair=pair,
+                candles=candles,
+                indicators=indicators,
+                score=score
+            )
+
+            if signal:
+                self.signal_repo.save_signal(signal)
+                logger.info(f"🚨 Señal generada para {pair}")
+                break  # SOLO UNA señal activa a la vez
+
+        logger.info("✅ Ciclo finalizado")
